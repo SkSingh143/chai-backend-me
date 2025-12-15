@@ -73,6 +73,9 @@ const registerUser = asyncHandler( async (req, res) => {
     if (!avatar) {
         throw new ApiError(400, "Avatar file is required")
     }
+
+    console.log(avatar.secure_url);
+    
    
 
     const user = await User.create({
