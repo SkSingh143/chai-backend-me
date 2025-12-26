@@ -11,19 +11,18 @@ const createTweet = asyncHandler(async (req, res) => {
     const {text} = req.body
      if(!text)
         {
-            return res.status(403)
-            .json(new ApiError(403,"some trxt is requires i want to post ",))
+            throw new ApiError(400,"some trxt is requires i want to post ")
         }
     
-    await Tweet.create({
+   const tweet = await Tweet.create({
         content:text,
         owner:req.user._id
     })
-     
+    
      
     res
     .status(200)//this status is the status that is real status of process 
-    .json(new ApiResponse(200,[1],"tweet saved succesfully"))
+    .json(new ApiResponse(200,tweet,"tweet saved succesfully"))
 
 })
 
@@ -32,17 +31,11 @@ const getUserTweets = asyncHandler(async (req, res) => {
     const userId=req.user._id;
     
     const tweets= await Tweet.find({
-        owner:new mongoose.Types.ObjectId(userId)
+        owner:userId
     })
-
-    if(!tweets){
-        return res.status(200)
-        .json(new ApiResponse(200,[],"this user have not tweeted anything yet"))
-    }
 
     return res.status(200)
         .json(new ApiResponse(200,tweets,"users tweets have been sent succesfully "))
-
 
 
 })
@@ -53,21 +46,20 @@ const updateTweet = asyncHandler(async (req, res) => {
     const {text} =req.body
 
     if(!tweetId){
-        return res
-        .status(403)
-        .json(new ApiError(403,"tweet information is required to edit the tweet "))
+        throw new ApiError(403,"tweet information is required to edit the tweet ")
     }
 
-    const tweet=await Tweet.findById(tweetId).select("-owner -createdAt -updatedAt")
+    const tweet=await Tweet.findOne({
+       _id:tweetId,
+       owner:req.user._id 
+    }).select("-owner -createdAt -updatedAt __v")
 
-    if(!tweetId){
-        return res
-        .status(403)
-        .json(new ApiError(403,"no such tweet present "))
+    if(!tweet){
+        throw new ApiError(404,"no such tweet present ")
     }
 
     tweet.content=text;
-    tweet.save();
+    await tweet.save();
 
     return res
         .status(200)
@@ -83,20 +75,29 @@ const deleteTweet = asyncHandler(async (req, res) => {
     const {tweetId}=req.params
 
     if(!tweetId){
-        return res
-        .status(403)
-        .json(new ApiError(403,"tweet information is required to delete the tweet "))
+        throw new ApiError(403,"tweet information is required to delete the tweet ")
     }
 
-    await Tweet.findByIdAndDelete(new mongoose.Types.ObjectId(tweetId))
+   const operation= await Tweet.findOneAndDelete({
+    owner:req.user._id,
+    _id:tweetId
+   })
+
+   if (!operation) {
+  throw new ApiError(404, "Tweet not found or unauthorized");
+}
+
+   console.log(operation);//returns that particular thing that is getting deleted
+   
 
     return res
     .status(200)
-    .json(new ApiResponse(200,[1],"tweet deleted succesfully "))
+    .json(new ApiResponse(200,{deleted:true},"tweet deleted succesfully "))
 
 
 })
-
+//ek check lag sakta hai ki koi apna hi channel subscribe toh nhi kar rha ais akuch kuch kuch aur bhi check 
+//ho sakta hai sochan padega 
 export {
     createTweet,
     getUserTweets,

@@ -11,15 +11,14 @@ const getVideoComments = asyncHandler(async (req, res) => {
     const limit = Number(req.query.limit) || 10
     
     if(!videoId){
-        req.status(403)
-        .json(new ApiError(403,"information about video is missing "))
+        throw new ApiError(403,"information about video is missing ")
     }
 
     const commentsOnVideo = await Comment.find({
-        video:videoId,
-        owner:req.user._id
+        video:videoId
+        // owner:req.user._id    //otheerwise user will see only those comments which he did on that video
     }).skip((page-1)*limit)
-    .limit(limit).select("-createdAt -updatedAt -_id -__v")
+    .limit(limit).select("-createdAt -updatedAt  -__v")
 
     return res.
     status(200)
@@ -29,18 +28,18 @@ const getVideoComments = asyncHandler(async (req, res) => {
 const getTweetComments = asyncHandler(async (req, res) => {
     //TODO: get all comments for a video
     const {tweetId} = req.params
-    const {page = 1, limit = 10} = Number(req.query)
+    const page = Number(req.query.page) || 1
+    const limit = Number(req.query.limit) || 10
 
     if(!tweetId){
-        res.status(403)
-        .json(new ApiError(403,"information about video is missing "))
+        throw new ApiError(403,"information about video is missing ")
     }
 
     const commentsOnTweet = await Comment.find({
-        tweet:tweetId,
-        owner:req.user._id
+        tweet:tweetId
+        // owner:req.user._id  //otherwise he will se only his comment 
     }).skip((page-1)*limit)
-    .limit(limit).select("-createdAt -updatedAt -_id")
+    .limit(limit).select("-createdAt -updatedAt ")
 
     return res.
     status(200)
@@ -49,52 +48,54 @@ const getTweetComments = asyncHandler(async (req, res) => {
 })
 
 const addCommentOnTweet = asyncHandler(async (req, res) => {
-    // TODO: add a comment to a video
-   const comment = req.body
-    const tweetId = req.params
+    // TODO: add a comment to a tweet
+   const {comment} = req.body
+    const {tweetId} = req.params
+
+    console.log(req.params);
+    
 
     if(!comment){
-        res.status(403)
-        .json(new ApiError(403,"comment cannot be empty"))
+        throw new ApiError(404,"comment cannot be empty")
     }
     if(!tweetId){
-        res.status(403)
-        .json(new ApiError(403,"information on video is missing "))
+        throw new ApiError(403,"information on video is missing ")
     }
 
     const createdComment = await Comment.create({
         content:comment,
-        owner:req.user?._id,
-        tweet: tweetId
-    }).select("-createdAt -updatedAt -_id")
-
-    return res
-    .status(200)
-    .json(new ApiResponse(200,createdComment,"your comment has been succesfully added"))
-})
-const addCommentOnVideo = asyncHandler(async (req, res) => {
-    // TODO: add a comment to a video
-    const {comment} = req.body
-    const {videoId }= req.params
-
-    if(!comment){
-        res.status(403)
-        .json(new ApiError(403,"comment cannot be empty"))
-    }
-    if(!videoId){
-        res.status(403)
-        .json(new ApiError(403,"information on video is missing "))
-    }
-
-    const createdComment = await Comment.create({
-        content:comment,
-        owner:req.user?._id,
-        video: videoId
+        owner:req.user._id,
+        tweet: tweetId,
+        video:null
     })
 
     return res
     .status(200)
-    .json(new ApiResponse(200,createdComment,"your comment has been succesfully added"))
+    .json(new ApiResponse(200,createdComment,"your comment on this tweet  has been succesfully added"))
+})
+
+const addCommentOnVideo = asyncHandler(async (req, res) => {
+    // TODO: add a comment to a video
+    const {comment} = req.body
+    const {videoId}= req.params
+
+    if(!comment){
+        throw new ApiError(404,"comment cannot be empty")
+    }
+    if(!videoId){
+        throw new ApiError(403,"information on video is missing ")
+    }
+
+    const createdComment = await Comment.create({
+        content:comment,
+        owner:req.user._id,
+        video: videoId,
+        tweet:null
+    })
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200,createdComment,"your comment has been succesfully added on this video"))
 })
 
 const updateComment = asyncHandler(async (req, res) => {
@@ -102,18 +103,24 @@ const updateComment = asyncHandler(async (req, res) => {
     const {commentId} = req.params
     const {newComment} = req.body
     if(!commentId){
-        return res.status(403)
-        .json(new ApiError(403,"information is required about the tweet"))
+        throw new ApiError(403,"information is required about the tweet")
     }
     if(!newComment){
-        return res.status(403)
-        .json(new ApiError(403,"comment cannot be empty"))
+        throw new ApiError(404,"comment cannot be empty")
     }
 
-    const oldComment= await Comment.findById(commentId).select("-createdAt -updatedAt")
+    // const oldComment= await Comment.findById(commentId).select("-createdAt -updatedAt") this is authenticated but not authorized
+    const oldComment= await Comment.findOne({
+        owner:req.user._id,
+        _id:commentId
+    }).select("-createdAt -updatedAt")
+
+    if(!oldComment){
+        throw new ApiError(400,"no  such comment ")
+    }
 
     oldComment.content=newComment
-    oldComment.save();
+    await oldComment.save();
 
     
 
@@ -128,17 +135,23 @@ const deleteComment = asyncHandler(async (req, res) => {
     // TODO: delete a comment
     const {commentId} = req.params
     if(!commentId){
-        return res.status(403)
-        .json(new ApiError(403,"information is required about the tweet"))
+        throw new ApiError(403,"information is required about the tweet")
     }
-     await Comment.findByIdAndDelete(commentId)
+     const opertation = await Comment.findOneAndDelete({
+        _id:commentId,
+        owner:req.user._id
+     })//this is the good code which checks authorization
+     if(!opertation){
+        throw new ApiError(404,"no such comment ")
+     }
 
      return res
     .status(200)
-    .json(new ApiResponse(200,[1],"your comment have been succesfully deleted"))
+    .json(new ApiResponse(200,{deleted:true},"your comment have been succesfully deleted"))
 
 })
-
+//ek check lag sakta hai ki koi apna hi channel subscribe toh nhi kar rha ais akuch kuch kuch aur bhi check 
+//ho sakta hai sochan padega 
 export {
     getVideoComments,
     getTweetComments, 
